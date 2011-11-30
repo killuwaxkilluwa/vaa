@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<!--
+ * Copyright (c) 2010 The Chromium Authors. All rights reserved.  Use of this
+ * source code is governed by a BSD-style license that can be found in the
+ * LICENSE file.
+ *
+ * Author: Eric Bidelman <ericbidelman@chromium.org>
+-->
+<html>
+  <head>
+    <title>Options</title>
+    <script type="text/javascript" src="js/jquery-1.4.1.min.js"></script>
+  </head>
+  <body onload="initUI(); set();">
+    <p><button id="revoke" onclick="logout();"><span id="revokeOAuthKey"></span></button></p>
+    <p><span id = "refreshRateKey"></span><input id="refresh_rate" value="300"></p>
+    <p><span id = "vocabularyNameKey"></span><input id="spreadsheet_Name" value="MyWordsTerminator"></p>
+	<form name = "options">
+	<p><span id = "mouseModifierKey"></span><select id="sc1"><option value="none">none</option><option value="Shift">Shift</option><option value="Ctrl">Ctrl</option><option value="Alt">Alt</option></select><b>+</b><select id="sc2"><option value="Ctrl">Ctrl</option><option value="Shift">Shift</option><option value="Alt">Alt</option><option value="none">none</option></select><br></p>
+	<p><span id = "captureDictServerKey"></span><select id="Dic"><option value="Dict">Dict</option><option value="Google">Google</option></select><br></p>
+	<p><span id = "viewDictServerKey"></span><select id="ViewDic"><option value="Google">Google</option><option value="Dict">Dict</option></select><br></p>
+	<p><span id = "targetLanguageKey"></span><select id="lg"><option value="zh-CN">Chinese (Simplified)</option><option value="af">Afrikaans</option><option value="sq">Albanian</option><option value="ar">Arabic</option><option value="be">Belarusian</option><option value="bg">Bulgarian</option><option value="ca">Catalan</option><option value="zh-TW">Chinese (Traditional)</option><option value="hr">Croatian</option><option value="cs">Czech</option><option value="da">Danish</option><option value="nl">Dutch</option><option value="en">English</option><option value="et">Estonian</option><option value="tl">Filipino</option><option value="fi">Finnish</option><option value="fr">French</option><option value="gl">Galician</option><option value="de">German</option><option value="el">Greek</option><option value="iw">Hebrew</option><option value="hi">Hindi</option><option value="hu">Hungarian</option>
+	<p><option value="is">Icelandic</option><option value="idy">Indonesian</option><option value="ga">Irish</option><option value="it">Italian</option><option value="ja">Japanese</option><option value="ko">Korean</option><option value="lv">Latvian</option><option value="lt">Lithuanian</option><option value="mk">Macedonian</option><option value="ms">Malay</option>
+	<option value="mt">Maltese</option><option value="no">Norwegian</option><option value="fa">Persian</option><option value="pl">Polish</option><option value="pt">Portuguese</option><option value="ro">Romanian</option><option value="ru">Russian</option><option value="sr">Serbian</option><option value="sk">Slovak</option><option value="sl">Slovenian</option><option value="es">Spanish</option><option value="sw">Swahili</option><option value="sv">Swedish</option><option value="th">Thai</option><option value="tr">Turkish</option><option value="uk">Ukrainian</option><option value="vi">Vietnamese</option><option value="cy">Welsh</option><option value="yi">Yiddish</option></select>
+	<br />
+	<p>
+	<button id="apply" onclick="save();"><span id="applyButtonKey"></span></button>
+	<button id="close" onclick="closeOptionsPage();"><span id="closeButtonKey"></span></button>
+	</p>	
+	</p>
+	</form>
+    <script type="text/javascript">
+      getMessage = function() {
+	  var revokeOAuth_Key = chrome.i18n.getMessage("revokeOAuthKey");
+	  var refreshRate_Key = chrome.i18n.getMessage("refreshRateKey");
+	  var vocabularyName_Key = chrome.i18n.getMessage("vocabularyNameKey");
+	  var mouseModifier_Key = chrome.i18n.getMessage("mouseModifierKey");
+	  var captureDictServer_Key = chrome.i18n.getMessage("captureDictServerKey");
+	  var viewDictServer_Key = chrome.i18n.getMessage("viewDictServerKey");
+	  var targetLanguage_Key = chrome.i18n.getMessage("targetLanguageKey");
+	  var applyButton_Key = chrome.i18n.getMessage("applyButtonKey");
+	  var closeButton_Key = chrome.i18n.getMessage("closeButtonKey");
+	  
+	  document.getElementById("revokeOAuthKey").innerHTML = revokeOAuth_Key;
+	  document.getElementById("refreshRateKey").innerHTML = refreshRate_Key;
+	  document.getElementById("vocabularyNameKey").innerHTML = vocabularyName_Key;
+	  document.getElementById("mouseModifierKey").innerHTML = mouseModifier_Key;
+	  document.getElementById("captureDictServerKey").innerHTML = captureDictServer_Key;
+	  document.getElementById("viewDictServerKey").innerHTML = viewDictServer_Key;
+	  document.getElementById("targetLanguageKey").innerHTML = targetLanguage_Key;
+	  document.getElementById("applyButtonKey").innerHTML = applyButton_Key;
+	  document.getElementById("closeButtonKey").innerHTML = closeButton_Key;	  
+      }
+
+      var bgPage = chrome.extension.getBackgroundPage();
+
+      $('#refresh_rate').change(function() {
+        localStorage.refreshRate = $(this).val();
+        bgPage.refreshRate = localStorage.refreshRate;
+        bgPage.pollIntervalMin =  bgPage.refreshRate * 1000;
+      });	  
+
+      $('#spreadsheet_Name').change(function() {
+        localStorage.spreadsheetName = $(this).val();
+        bgPage.spreadsheetName = localStorage.spreadsheetName;
+		bgPage.wordslistFeed = '';
+		
+      });	  
+	   $('#Dic').change(function() {
+		var lang = $.trim($('#Dic').val());
+		if(lang == "Dict")
+			document.getElementById("lg").disabled = true;
+		else document.getElementById("lg").disabled = false;
+      });
+	  
+      function logout() {
+        bgPage.logout();
+        $('#revoke').get(0).disabled = true;
+      }
+
+      function initUI() {
+	  getMessage();
+        if (!bgPage.oauth.hasToken()) {
+          $('#revoke').get(0).disabled = true;
+        }
+
+        if (localStorage.refreshRate) {
+          $('#refresh_rate').val(localStorage.refreshRate);
+        } else {
+           $('#refresh_rate').val(bgPage.refreshRate);
+        }
+
+        if (localStorage.spreadsheetName) {
+          $('#spreadsheet_Name').val(localStorage.spreadsheetName);
+        } else {
+           $('#spreadsheet_Name').val(bgPage.spreadsheetName);
+        }
+		
+      }
+	  //the following is added by huan
+	  function save(){
+	 // alert("dave");
+	 // var optionTabId;
+	  var b = $.trim($('#sc1').val());
+	  var e = $.trim($('#sc2').val());
+	  var dic = $.trim($('#Dic').val());
+	  var language = $.trim($('#lg').val());
+	  var viewDic = $.trim($('#ViewDic').val());
+	  var h=(b=="Shift"||e=="Shift")?true:false;
+	  var i=(b=="Ctrl"||e=="Ctrl")?true:false;
+	  var a=(b=="Alt"||e=="Alt")?true:false;
+	  var allNone = false;
+	  if((b == "none") && (e == "none")) allNone = true;
+	  myport=chrome.extension.connect({name:"wordterminate"});
+	  myport.postMessage({message:"options",Shift:h,Ctrl:i,Alt:a,Dic:dic,Lg:language,ViewDic:viewDic,AllNone:allNone});
+	 // chrome.tabs.getSelected(function(tab){optionTabId = tab.id});
+	  //chrome.tabs.remove(optionTabId);
+	  //alert(optionTabId);
+	  }
+	  function set(){
+	  var a=localStorage.getItem("sk"),
+	  d=localStorage.getItem("ck"),
+	  b=localStorage.getItem("ak"),
+	  dic = localStorage.getItem("dic"),
+	  lg = localStorage.getItem("lg"),
+	  vdic = localStorage.getItem("vdic"),
+	  allNone = localStorage.getItem("allNone");
+	  var i;
+	  if((a=="true") && (d=="false") && (b=="false")){document.options.sc2[1].selected=true;}
+	  else if((d=="true") && (a=="false") && (b=="false")){document.options.sc2[0].selected=true;}
+	  else if((b=="true") && (a=="false") && (d=="false")){document.options.sc2[2].selected=true;}
+	  else if((a=="true") && (d=="true")){document.options.sc1[1].selected=true;document.options.sc2[0].selected=true}
+	  else if((a=="true") && (b=="true")){document.options.sc1[1].selected=true;document.options.sc2[2].selected=true}
+	  else if((d=="true") && (b=="true")){document.options.sc1[2].selected=true;document.options.sc2[2].selected=true}
+	  else if(allNone == "true"){document.options.sc2[3].selected=true;}
+	  
+	  if(dic == "Google") document.options.Dic[1].selected = true; 
+		else{
+		document.options.Dic[0].selected = true;
+		document.getElementById("lg").disabled = true;
+		} 
+	  if(vdic == "Dict") document.options.ViewDic[1].selected = true; 
+		else document.options.ViewDic[0].selected = true; 
+	  for(i=0;i<document.options.lg.length;i++)
+		if(document.options.lg[i].value == lg)document.options.lg[i].selected=true;
+	  }
+	  
+	  function closeOptionsPage(){
+		myport=chrome.extension.connect({name:"wordterminate"});
+		myport.postMessage({message:"close"});
+	  }
+
+    </script>
+  </body>
+</html>

@@ -1,0 +1,81 @@
+{
+  "extName": {
+    "message": "VAA",
+    "description": "Extension name in manifest."
+  },
+  "description": {
+    "message": "外语学习好帮手——随时随地记单词",
+    "description": "Extension description in manifest."
+  },
+  "default_title": {
+    "message": "生词本",
+    "description": "Extension browser action tooltip text in manifest."
+  },
+  
+  "fetchwords_displayMsg": {
+    "message": "生词下载中...",
+    "description": "Display Msg when fetching user's words."
+  },
+  "fetchwords_error_displayMsg": {
+    "message": "生词下载失败，请重试！",
+    "description": "Display Msg when fetching user's words."
+  },
+  "initvocabulary_displayMsg": {
+    "message": "初始化生词本...",
+    "description": "Display Msg when init user's vocabulary."
+  },
+  "creatvocabulary_displayMsg": {
+    "message": "生词本不存在，创建中...",
+    "description": "Display Msg when creating user's vocabulary."
+  },
+  "vocabularycreated_displayMsg": {
+    "message": "生词本创建成功！",
+    "description": "Display Msg when vocabulary created."
+  },
+  "worddeleted_displayMsg": {
+    "message": "已删除！",
+    "description": "Display Msg when user's word deleted."
+  },
+  "wordlowerlevel_displayMsg": {
+    "message": "状态已更新！",
+    "description": "Display Msg when update user's word level."
+  },
+
+  "revokeOAuthKey": {
+    "message": "解除Google文档授权",
+    "description": "text of Revoke your OAuth token button on option page"
+  },
+  "refreshRateKey": {
+    "message": "刷新间隔（秒）：",
+    "description": "Refresh rate key on option page"
+  },
+  "vocabularyNameKey": {
+    "message": "生词本名称：",
+    "description": "vocabulary title key on option page"
+  },
+  "mouseModifierKey": {
+    "message": "鼠标取词修饰键：",
+    "description": "mouse lookup modifier key on option page"
+  },
+  "captureDictServerKey": {
+    "message": "鼠标取词服务器：",
+    "description": "capture dictionary server key on option page"
+  },
+  "viewDictServerKey": {
+    "message": "查词服务器：",
+    "description": "view dictionary server key on option page"
+  },
+  "targetLanguageKey": {
+    "message": "目标语言：",
+    "description": "target language key on option page"
+  },
+  "applyButtonKey": {
+    "message": "确认",
+    "description": "apply button key on option page"
+  },
+  "closeButtonKey": {
+    "message": "关闭",
+    "description": "close button key on option page"
+  }  
+}
+

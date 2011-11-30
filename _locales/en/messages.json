@@ -1,0 +1,81 @@
+{
+  "extName": {
+    "message": "VAA",
+    "description": "Extension name in manifest."
+  },
+  "description": {
+    "message": "Vocabulary-memorizing Anywhere Anytime",
+    "description": "Extension description in manifest."
+  },
+  "default_title": {
+    "message": "Word List",
+    "description": "Extension browser action tooltip text in manifest."
+  },
+  
+  "fetchwords_displayMsg": {
+    "message": "Fetching your words...",
+    "description": "Display Msg when fetching user's words."
+  },
+  "fetchwords_error_displayMsg": {
+    "message": "Failed to fetch words. Please try again.",
+    "description": "Display Msg when fetching user's words."
+  },
+  "initvocabulary_displayMsg": {
+    "message": "Init your vocabulary...",
+    "description": "Display Msg when init user's vocabulary."
+  },
+  "creatvocabulary_displayMsg": {
+    "message": "Vocabulary not exist, creating...",
+    "description": "Display Msg when creating user's vocabulary."
+  },
+  "vocabularycreated_displayMsg": {
+    "message": "Vocabulary created",
+    "description": "Display Msg when vocabulary created."
+  },
+  "worddeleted_displayMsg": {
+    "message": "Word deleted!",
+    "description": "Display Msg when user's word deleted."
+  },
+  "wordlowerlevel_displayMsg": {
+    "message": "Status updated!",
+    "description": "Display Msg when user's word deleted."
+  },
+
+  "revokeOAuthKey": {
+    "message": "Revoke your OAuth token",
+    "description": "text of Revoke your OAuth token button on option page"
+  },
+  "refreshRateKey": {
+    "message": "Refresh rate(seconds): ",
+    "description": "Refresh rate key on option page"
+  },
+  "vocabularyNameKey": {
+    "message": "Vocabulary Title: ",
+    "description": "vocabulary title key on option page"
+  },
+  "mouseModifierKey": {
+    "message": "Mouse lookup modifier: ",
+    "description": "mouse lookup modifier key on option page"
+  },
+  "captureDictServerKey": {
+    "message": "Capture Dictionary Server: ",
+    "description": "capture dictionary server key on option page"
+  },
+  "viewDictServerKey": {
+    "message": "View Dictionary Server: ",
+    "description": "view dictionary server key on option page"
+  },
+  "targetLanguageKey": {
+    "message": "Target Language: ",
+    "description": "target language key on option page"
+  },
+  "applyButtonKey": {
+    "message": "Apply",
+    "description": "apply button key on option page"
+  },
+  "closeButtonKey": {
+    "message": "Close",
+    "description": "apply button key on option page"
+  }  
+}
+

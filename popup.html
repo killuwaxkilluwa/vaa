@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<!--
+ * Copyright (c) 2010 The Chromium Authors. All rights reserved.  Use of this
+ * source code is governed by a BSD-style license that can be found in the
+ * LICENSE file.
+ *
+ * Author: Eric Bidelman <ericbidelman@chromium.org>
+-->
+<html>
+<head>
+<title>VAA</title>
+<script type="text/javascript" src="js/jquery-1.4.1.min.js"></script>
+<style type="text/css">
+body {
+  font: 12px 'Myriad Pro', 'Tw Cen MT', Arial, Verdana, sans-serif;
+  color: #666666;
+  overflow-x: hidden;
+}
+ul {
+  padding: 0;
+  list-style: none;
+}
+li {
+  clear: both;
+  padding: 2px 0;
+}
+li div img {
+  margin: 0 5px;
+  vertical-align: middle;
+}
+li div {
+  white-space: nowrap;
+  overflow: auto;
+  width: 100px;
+  float: left;
+  padding: 2px 2px;
+}
+li span {
+  margin-left: 5px;
+}
+li:hover {
+  background-color: #fffccc;
+}
+a {
+ color: #4E7DC2;
+ text-decoration: none;
+}
+a:hover {
+  color: #880000;
+  text-decoration: underline;
+}
+#butter {
+  color: #fff;
+  background-color: #000033;
+  padding: 5px 20px;
+  border-radius: 15px;
+  width: auto;
+  text-align: center;
+  float: right;
+  display: none;
+}
+#butter.error {
+  background-color: red;
+}
+#new_word_container {
+  display: none;
+}
+#new_word_container input[type='text'],textarea {
+  width: 100%;
+}
+#output {
+  width: 360px;
+  clear: both;
+}
+[contenteditable]:hover {
+  outline: 1px dotted #666;
+}
+.word {
+font-weight: bold
+}
+.phonetic {
+font-weight: bold
+}
+.translation {
+font-weight: bold
+}
+</style>
+</head>
+<body>
+
+<div style="height:15px;">
+  <div style="float:left;">
+    <a href="javascript:void(0);" onclick="gwords.refreshWords();return false;"><img src="\img\icons\default\16\refresh.png" alt="Refresh" /></a>
+    <!--<a href="javascript:void(0);" onclick="$('#new_word_container').toggle();return false;">New Word</a>-->
+    <a href="javascript:void(0);" onclick="gdocs.openVocabulary();return false;"><img src="\img\icons\default\16\view_detail.png" alt="Vocabulary" /></a>
+    <a href="javascript:void(0);" onclick="gdocs.getAtom();return false;"><img src="\img\icons\default\16\rss.png" alt="Subscribe" /></a>
+    <a href="javascript:void(0);" onclick="gdocs.openOption();return false;"><img src="\img\icons\default\16\option.png" alt="Option" /></a>
+  </div>
+  <div id="butter">Fetching your words</div>
+</div>
+<!--<div id="new_word_container">
+  Levels: <select id="word_levels">
+    <option value="1">1</option>
+    <option value="2">2</option>
+    <option value="3">3</option>
+  </select>
+  <input type="text" id="word_title" placeholder="Enter your word"><br>
+  <button onclick="gwords.manu_addWord();" style="float:right;">Add</button>
+</div>-->
+<div id="output"></div>
+
+<script type="text/javascript">
+// Protected namespaces.
+var util = {};
+var gwords = {};
+var gdocs = {};
+
+var dictServerUrl = new Array("http://www.google.com/dictionary?langpair=en|zh&q=", "http://dict.cn/search.php?q=");
+
+var fetchwords_displayMsg = chrome.i18n.getMessage("fetchwords_displayMsg");
+var fetchwords_error_displayMsg = chrome.i18n.getMessage("fetchwords_error_displayMsg");
+var initvocabulary_displayMsg = chrome.i18n.getMessage("initvocabulary_displayMsg");
+var creatvocabulary_displayMsg = chrome.i18n.getMessage("creatvocabulary_displayMsg");
+var vocabularycreated_displayMsg = chrome.i18n.getMessage("vocabularycreated_displayMsg");
+var worddeleted_displayMsg = chrome.i18n.getMessage("worddeleted_displayMsg");
+var wordlowerlevel_displayMsg = chrome.i18n.getMessage("wordlowerlevel_displayMsg");
+
+var bgPage = chrome.extension.getBackgroundPage();
+var pollIntervalMax = 1000 * 60 * 60;  // 1 hour
+var requestFailureCount = 0;  // used for exponential backoff
+var requestTimeout = 1000 * 2;  // 5 seconds
+
+var viewServer = (localStorage.getItem("vdic") == "Dict") ? 1 : 0;
+
+var DEFAULT_MIMETYPES = {
+  'atom': 'application/atom+xml',
+  'document': 'text/plain',
+  'spreadsheet': 'text/csv',
+  'presentation': 'text/plain',
+  'pdf': 'application/pdf'
+};
+
+gdocs.openVocabulary = function() {
+    chrome.tabs.create({url: bgPage.vocabularyLink}); 
+};
+gdocs.getAtom = function() {
+    chrome.tabs.create({url: bgPage.wordslistAtom});
+};
+gdocs.openOption = function() {
+    chrome.tabs.create({url: "options.html"});
+};
+
+/**
+ * Class to compartmentalize properties of a Google document.
+ * @param {Object} entry A JSON representation of a DocList atom entry.
+ * @constructor
+ */
+gwords.GoogleWord = function(entry) {
+  this.entry = entry;
+  this.title = entry.title.$t;
+  this.link = {
+    'edit': gwords.getLink(entry.link, 'edit').href
+  };
+  this.type = entry.gsx$levels.$t;
+  this.phonetics = entry.gsx$phonetics.$t;
+  this.translations = entry.gsx$translations.$t;
+};
+
+/**
+ * Sets up a future poll for the user's document list.
+ */
+util.scheduleRequest = function() {
+  var exponent = Math.pow(2, requestFailureCount);
+  var delay = Math.min(bgPage.pollIntervalMin * exponent,
+                       pollIntervalMax);
+  delay = Math.round(delay);
+
+  if (bgPage.oauth.hasToken()) {
+    var req = bgPage.window.setTimeout(function() {
+      gwords.getWordList();
+      util.scheduleRequest();
+    }, delay);
+    bgPage.requests.push(req);
+  }
+};
+
+/**
+ * Urlencodes a JSON object of key/value query parameters.
+ * @param {Object} parameters Key value pairs representing URL parameters.
+ * @return {string} query parameters concatenated together.
+ */
+util.stringify = function(parameters) {
+  var params = [];
+  for(var p in parameters) {
+    params.push(encodeURIComponent(p) + '=' +
+                encodeURIComponent(parameters[p]));
+  }
+  return params.join('&');
+};
+
+/**
+ * Creates a JSON object of key/value pairs
+ * @param {string} paramStr A string of Url query parmeters.
+ *    For example: max-results=5&startindex=2&showfolders=true
+ * @return {Object} The query parameters as key/value pairs.
+ */
+util.unstringify = function(paramStr) {
+  var parts = paramStr.split('&');
+
+  var params = {};
+  for (var i = 0, pair; pair = parts[i]; ++i) {
+    var param = pair.split('=');
+    params[decodeURIComponent(param[0])] = decodeURIComponent(param[1]);
+  }
+  return params;
+};
+
+/**
+ * Utility for displaying a message to the user.
+ * @param {string} msg The message.
+ */
+util.displayMsg = function(msg) {
+  $('#butter').removeClass('error').text(msg).show();
+};
+
+/**
+ * Utility for removing any messages currently showing to the user.
+ */
+util.hideMsg = function() {
+  $('#butter').fadeOut(1500);
+};
+
+/**
+ * Utility for displaying an error to the user.
+ * @param {string} msg The message.
+ */
+util.displayError = function(msg) {
+  util.displayMsg(msg);
+  $('#butter').addClass('error');
+};
+
+/**
+ * Returns the correct atom link corresponding to the 'rel' value passed in.
+ * @param {Array<Object>} links A list of atom link objects.
+ * @param {string} rel The rel value of the link to return. For example: 'next'.
+ * @return {string|null} The appropriate link for the 'rel' passed in, or null
+ *     if one is not found.
+ */
+gwords.getLink = function(links, rel) {
+  for (var i = 0, link; link = links[i]; ++i) {
+    if (link.rel === rel) {
+      return link;
+    }
+  }
+  return null;
+};
+
+/**
+ * A generic error handler for failed XHR requests.
+ * @param {XMLHttpRequest} xhr The xhr request that failed.
+ * @param {string} textStatus The server's returned status.
+ */
+gwords.handleError = function(xhr, textStatus) {
+  util.displayError(fetchwords_error_displayMsg);
+  ++requestFailureCount;
+};
+
+/**
+ * A helper for constructing the raw Atom xml send in the body of an HTTP post.
+ * @param {XMLHttpRequest} xhr The xhr request that failed.
+ * @param {string} docTitle A title for the document.
+ * @param {string} docType The type of document to create.
+ *     (eg. 'document', 'spreadsheet', etc.)
+ * @return {string} The Atom xml as a string.
+ */
+gwords.constructAtomXml_ = function(wordTitle, wordLevels) {
+
+  var atom = ['<entry xmlns="http://www.w3.org/2005/Atom" xmlns:gsx="http://schemas.google.com/spreadsheets/2006/extended">',
+              '<gsx:words>',wordTitle,'</gsx:words>',
+              '<gsx:levels>',wordLevels,'</gsx:levels>',
+              '</entry>'].join('');
+  return atom;
+};
+
+/**
+ * A helper for constructing the body of a mime-mutlipart HTTP request.
+ * @param {string} title A title for the new document.
+ * @param {string} docType The type of document to create.
+ *     (eg. 'document', 'spreadsheet', etc.)
+ * @param {string} body The body of the HTTP request.
+ * @return {string} The Atom xml as a string.
+ */
+gwords.constructContentBody_ = function(title, wordLevels) {
+  var body = [
+              gwords.constructAtomXml_(title, wordLevels), '\r\n',
+              ].join('');
+  return body;
+};
+
+/** 
+ * Add a new word via manual.
+ 
+gwords.manu_addWord = function() {
+  var mword = $.trim($('#word_title').val());
+  if (!mword) {
+    alert('Please provide a word');
+    return;
+  }
+  gwords.addWord(mword);
+};
+
+/**
+ * Add a new word in words list.
+ 
+gwords.addWord = function(word) {
+
+  var wordLevels = $('#word_levels').val();
+
+  util.displayMsg('Adding word...');
+
+  var handleSuccess = function(resp, xhr) {
+    bgPage.words.splice(0, 0, new gwords.GoogleWord(JSON.parse(resp).entry));
+
+    gwords.renderWordList();
+    bgPage.setIcon({'text': bgPage.words.length.toString()});
+
+    $('#new_word_container').hide();
+    $('#word_title').val('');
+    $('#word_content').val('');
+    util.displayMsg('Word added!');
+    util.hideMsg();
+
+    requestFailureCount = 0;
+  };
+
+
+  var params = {
+    'method': 'POST',
+    'headers': {
+      'GData-Version': '3.0',
+      'Content-Type': 'application/atom+xml',	  
+    },
+    'parameters': {'alt': 'json'},
+    'body': gwords.constructContentBody_(word, wordLevels)
+  };
+
+  bgPage.oauth.sendSignedRequest(bgPage.wordslistFeed, handleSuccess, params);
+};*/
+
+
+/**
+ * Update level of a word from the user's word list.
+ * @param {integer} index An index intro the background page's docs array.
+ */
+gwords.updateLevel = function(index) {
+word = bgPage.words[index];
+if (word.type == 1) {
+gwords.deleteWord(index);
+} else {
+gwords.lowerLevel(index);
+}
+}
+/**
+ * Lower level of a word from the user's word list.
+ * @param {integer} index An index intro the background page's docs array.
+ */
+gwords.lowerLevel = function(index) {
+  var handleSuccess = function(resp, xhr) {
+    util.displayMsg(wordlowerlevel_displayMsg);
+    util.hideMsg();
+    requestFailureCount = 0;
+    bgPage.setIcon({'text': bgPage.words.length.toString()});
+  }
+  
+  var word = bgPage.words[index];
+  var wordLevel = word.type - 1;
+  var wordTitle = word.title;
+  var wordPhonetic = word.phonetics;
+  var wordTranslation = word.translations;
+  
+  var params = {
+    'method': 'PUT',
+    'headers': {
+      'GData-Version': '3.0',
+      'Content-Type': 'application/atom+xml',
+      'If-Match': '*'
+    },
+    'body': [ '<entry xmlns="http://www.w3.org/2005/Atom"', 
+			  ' xmlns:gsx="http://schemas.google.com/spreadsheets/2006/extended">',
+              '<gsx:levels>',wordLevel,'</gsx:levels>',
+              '<gsx:words>',wordTitle,'</gsx:words>',
+              '<gsx:phonetics>',wordPhonetic,'</gsx:phonetics>',
+              '<gsx:translations>',wordTranslation,'</gsx:translations>',
+              '</entry>'].join('')
+  };
+
+  $('#output li').eq(index).fadeOut('slow');
+
+  var url = word.link['edit'];
+  bgPage.oauth.sendSignedRequest(url, handleSuccess, params);
+};
+
+/**
+ * Deletes a document from the user's document list.
+ * @param {integer} index An index intro the background page's docs array.
+ */
+gwords.deleteWord = function(index) {
+  var handleSuccess = function(resp, xhr) {
+    util.displayMsg(worddeleted_displayMsg);
+    util.hideMsg();
+    requestFailureCount = 0;
+    bgPage.words.splice(index, 1);
+    bgPage.setIcon({'text': bgPage.words.length.toString()});
+  }
+
+  var params = {
+    'method': 'DELETE',
+    'headers': {
+      'GData-Version': '3.0',
+      'If-Match': '*'
+    }
+  };
+
+  $('#output li').eq(index).fadeOut('slow');
+
+  var word = bgPage.words[index];
+  var url = word.link['edit'];
+  bgPage.oauth.sendSignedRequest(url, handleSuccess, params);
+};
+
+/**
+ * Callback for processing the JSON feed returned by the DocList API.
+ * @param {string} response The server's response.
+ * @param {XMLHttpRequest} xhr The xhr request that was made.
+ */
+gwords.processDocListResults = function(response, xhr) {
+  if (xhr.status != 200) {
+    gwords.handleError(xhr, response);
+    return;
+  } else {
+    requestFailureCount = 0;
+  }
+
+  var data = JSON.parse(response);
+  for (var i = 0, entry; entry = data.feed.entry[i]; ++i) {
+    bgPage.words.push(new gwords.GoogleWord(entry));
+  }
+
+  var nextLink = gwords.getLink(data.feed.link, 'next');
+  if (nextLink) {
+    gwords.getWordList(nextLink.href); // Fetch next page of results.
+  } else {
+    gwords.renderWordList();
+  }
+};
+
+/**
+ * Presents the in-memory documents that were fetched from the server as HTML.
+ */
+gwords.renderWordList = function() {
+  util.hideMsg();
+  // Construct the iframe's HTML.
+  var html = [];
+  for (var i = 0, word; word = bgPage.words[i]; ++i) {
+    var type = word.type;
+	var phonetics = word.phonetics;
+	var translations = word.translations;
+    html.push(
+      '<li data-index="', i , '">',
+      '<div class="word"><img src="img/icons/default/16/', type, '.png">',
+      '<span contenteditable="false" class="word_title"></span></div>',
+	  '<div class="phonetic">', phonetics, '</div>',
+	  '<div class="translation">', translations, '</div>',
+      '<span><a href="', dictServerUrl[viewServer] + bgPage.words[i].title,
+      '" target="_new"><img src="img/icons/default/16/view.png" alt="view" /></a><a href="javascript:void(0);" ',
+      'onclick="gwords.updateLevel(',i,
+      ');return false;"><img src="img/icons/default/16/delete.png" alt="Delete" /></a>','</span></li>');
+  }
+  $('#output').html('<ul>' + html.join('') + '</ul>');
+
+  // Set each span's innerText to be the doc title. We're filling this after
+  // the html has been rendered to the page prevent XSS attacks when using
+  // innerHTML.
+  $('#output li span.word_title').each(function(i, ul) {
+    $(ul).text(bgPage.words[i].title);
+  });
+  bgPage.setIcon({'text': bgPage.words.length.toString()});
+};
+
+/**
+ * Fetches the user's document list.
+ * @param {string?} opt_url A url to query the doclist API with. If omitted,
+ *     the main doclist feed uri is used.
+ */
+gwords.getWordList = function(opt_url) {
+  var url = opt_url || null;
+
+  var params = {
+    'headers': {
+      'GData-Version': '3.0'
+    }
+  };
+
+  if (!url) {
+    util.displayMsg(fetchwords_displayMsg);
+    bgPage.setIcon({'text': '...'});
+
+    bgPage.words = []; // Clear document list. We're doing a refresh.
+    url = bgPage.wordslistFeed;
+    params['parameters'] = {
+      'alt': 'json',
+    };
+  } else {
+    util.displayMsg($('#butter').text() + '.');
+
+    var parts = url.split('?');
+    if (parts.length > 1) {
+      url = parts[0]; // Extract base URI. Params are passed in separately.
+      params['parameters'] = util.unstringify(parts[1]);
+    }
+  }
+  bgPage.oauth.sendSignedRequest(url, gwords.processDocListResults, params);
+};
+
+/**
+ * Refreshes the user's document list.
+ */
+gwords.refreshWords = function() {
+  bgPage.clearPendingRequests();
+  gwords.getWordList();
+  util.scheduleRequest();
+};
+
+/**
+ * Update Sheet Name.
+ */
+gwords.updateSheetName = function() {
+  var sheetTitle = bgPage.spreadsheetName;
+  var rowCount = 2;
+  var colCount = 4;
+  
+  var handleSuccess = function(resp, xhr) {
+	if (xhr.status != 200) {
+		gwords.handleError(xhr, resp);
+		return;
+	} else {
+		util.displayMsg(vocabularycreated_displayMsg);
+		gwords.getVocabularyListFeed();
+	}
+  };
+  
+  var params = {
+    'method': 'PUT',
+    'headers': {
+      'GData-Version': '3.0',
+      'Content-Type': 'application/atom+xml',
+      'If-Match': '*'
+    },
+    'body': [ '<entry xmlns="http://www.w3.org/2005/Atom"', 
+			  ' xmlns:gs="http://schemas.google.com/spreadsheets/2006">',
+              '<title>', sheetTitle, '</title>',
+              '<gs:rowCount>', rowCount, '</gs:rowCount>',
+              '<gs:colCount>', colCount, '</gs:colCount>',
+              '</entry>'].join('')
+  };
+  
+  bgPage.oauth.sendSignedRequest(localStorage.vocabularySheetEditFeed, handleSuccess, params);
+
+}
+/**
+ * Get worksheet's edit feed link.
+ */
+gwords.getVocabularySheetEditFeed = function(opt_url) {
+  var url = opt_url || null;
+  var params = {
+    'method': 'GET',
+    'headers': {
+      'GData-Version': '3.0'
+    }
+  };
+
+  if (!url) {
+    url = localStorage.vocabularyFeed;
+    params['parameters'] = {
+      'alt': 'json',
+    };
+  } else {
+    var parts = url.split('?');
+    if (parts.length > 1) {
+      url = parts[0]; // Extract base URI. Params are passed in separately.
+      params['parameters'] = util.unstringify(parts[1]);
+    }
+  }
+  
+  var handleSuccess = function(response, xhr) {
+	if (xhr.status != 200) {
+		gwords.handleError(xhr, response);
+		return;
+	} else {
+		var data = JSON.parse(response);
+		for (var i = 0, entry; entry = data.feed.entry[i]; ++i) {
+			if (entry.title.$t == 'Sheet1' || 'Sheet 1') {
+				localStorage.vocabularySheetEditFeed = gwords.getLink(entry.link, 'edit').href;
+				gwords.updateSheetName();
+			}
+		}
+	};
+  };
+
+  bgPage.oauth.sendSignedRequest(url, handleSuccess, params);
+};
+
+/**
+ * A helper for constructing the raw Atom xml send in the body of an HTTP post.
+ * @param {XMLHttpRequest} xhr The xhr request that failed.
+ * @param {string} docTitle A title for the document.
+ * @param {string} docType The type of document to create.
+ *     (eg. 'document', 'spreadsheet', etc.)
+ * @return {string} The Atom xml as a string.
+ */
+gdocs.constructAtomXml_ = function(docTitle, docType) {
+
+
+  var atom = ["<?xml version='1.0' encoding='UTF-8'?>", 
+              '<entry xmlns="http://www.w3.org/2005/Atom">',
+              '<category scheme="http://schemas.google.com/g/2005#kind"', 
+              ' term="http://schemas.google.com/docs/2007#', docType, '"/>',
+              '<title>', docTitle, '</title>',
+              '</entry>'].join('');
+  return atom;
+};
+
+/**
+ * A helper for constructing the body of a mime-mutlipart HTTP request.
+ * @param {string} title A title for the new document.
+ * @param {string} docType The type of document to create.
+ *     (eg. 'document', 'spreadsheet', etc.)
+ * @param {string} body The body of the HTTP request.
+ * @param {string} contentType The Content-Type of the (non-Atom) portion of the
+ *     http body.
+ * @param {boolean?} opt_starred Whether the document should be starred.
+ * @return {string} The Atom xml as a string.
+ */
+gdocs.constructContentBody_ = function(title, docType, body, contentType) {
+  var body = ['--END_OF_PART\r\n',
+              'Content-Type: application/atom+xml;\r\n\r\n',
+              gdocs.constructAtomXml_(title, docType), '\r\n',
+              '--END_OF_PART\r\n',
+              'Content-Type: ', contentType, '\r\n\r\n',
+              body, '\r\n',
+              '--END_OF_PART--\r\n'].join('');
+  return body;
+};
+
+/**
+ * Creat Vocabulary.
+ */
+gwords.creatVocabulary = function() {
+  var title = bgPage.spreadsheetName;
+  var content = 'words,phonetics,translations,levels';
+  var docType = 'spreadsheet';
+  
+  util.displayMsg(creatvocabulary_displayMsg);
+  var handleSuccess = function(resp, xhr) {
+	if (xhr.status != 201) {
+		gwords.handleError(xhr, resp);
+		return;
+	} else {
+		var data = JSON.parse(resp);
+		var links = data.entry.link;
+		localStorage.vocabularyFeed = gwords.getLink(links, 'http://schemas.google.com/spreadsheets/2006#worksheetsfeed').href;
+		localStorage.vocabularyLink = gwords.getLink(links, 'alternate').href;
+		bgPage.vocabularyLink = localStorage.vocabularyLink;
+		gwords.getVocabularySheetEditFeed();
+	}
+  };
+  
+  var params = {
+    'method': 'POST',
+    'headers': {
+      'GData-Version': '3.0',
+      'Content-Type': 'multipart/related; boundary=END_OF_PART',
+    },
+    'parameters': {'alt': 'json'},
+    'body': gdocs.constructContentBody_(title, docType, content,
+                                        DEFAULT_MIMETYPES[docType])
+  };
+  
+  bgPage.oauth.sendSignedRequest(bgPage.DOCLIST_FEED, handleSuccess, params);
+};
+
+/**
+ * Get Vocabulary List Feed.
+ */
+gwords.getVocabularyListFeed = function(opt_url) {
+  var url = opt_url || null;
+  var params = {
+    'method': 'GET',
+    'headers': {
+      'GData-Version': '3.0'
+    }
+  };
+
+  if (!url) {
+    url = localStorage.vocabularyFeed;
+    params['parameters'] = {
+      'alt': 'json',
+    };
+  } else {
+    var parts = url.split('?');
+    if (parts.length > 1) {
+      url = parts[0]; // Extract base URI. Params are passed in separately.
+      params['parameters'] = util.unstringify(parts[1]);
+    }
+  }
+  
+  var handleSuccess = function(response, xhr) {
+	if (xhr.status != 200) {
+		gwords.handleError(xhr, response);
+		return;
+	} else {
+		var data = JSON.parse(response);
+		for (var i = 0, entry; entry = data.feed.entry[i]; ++i) {
+			if (entry.title.$t == bgPage.spreadsheetName) {
+			    var parts1 = entry.content.src.split(':');
+			    localStorage.vocabularyListFeed = 'https:' + parts1[1];
+			    bgPage.wordslistFeed = localStorage.vocabularyListFeed;
+			    var parts2 = localStorage.vocabularyListFeed.split('private');
+			    localStorage.wordslistAtom = parts2[0] + 'public/basic';
+			    bgPage.wordslistAtom = localStorage.wordslistAtom;
+			    if (!bgPage.words.length) {
+				gwords.getWordList();
+			    } else {
+				gwords.renderWordList();
+			    }
+			    return;
+			} else if (entry.title.$t == 'Sheet 1') {
+			gwords.getVocabularySheetEditFeed();
+			}
+		}
+	};
+  };
+
+  bgPage.oauth.sendSignedRequest(url, handleSuccess, params);
+};
+
+
+/**
+ * Query the user's spreadsheet list.
+ * @param {string?} opt_url A url to query the doclist API with. If omitted,
+ *     the main doclist feed uri is used.
+ */
+gwords.queryVocabulary = function(opt_url) {
+  var url = opt_url || null;
+
+  var params = {
+    'method': 'GET',
+    'headers': {
+      'GData-Version': '3.0'
+    }
+  };
+
+  if (!url) {
+    util.displayMsg(initvocabulary_displayMsg);
+
+    url = bgPage.DOCLIST_FEED;
+    params['parameters'] = {
+      'alt': 'json',
+	  'title': bgPage.spreadsheetName,
+	  'title-exact': 'true'
+    };
+  } else {
+    var parts = url.split('?');
+    if (parts.length > 1) {
+      url = parts[0]; // Extract base URI. Params are passed in separately.
+      params['parameters'] = util.unstringify(parts[1]);
+    }
+  }
+  
+  var handleSuccess = function(response, xhr) {
+	if (xhr.status != 200) {
+	gwords.handleError(xhr, response);
+	return;
+	} else {
+		var data = JSON.parse(response);
+		if (!data.feed.entry) {
+			gwords.creatVocabulary();
+		} else {
+			for (var i = 0, entry; entry = data.feed.entry[i]; ++i) {
+			localStorage.vocabularyFeed = gwords.getLink(entry.link, 'http://schemas.google.com/spreadsheets/2006#worksheetsfeed').href;
+			localStorage.vocabularyLink = gwords.getLink(entry.link, 'alternate').href;
+			bgPage.vocabularyLink = localStorage.vocabularyLink;
+			}
+			gwords.getVocabularyListFeed();
+		}
+	}
+  };
+
+  bgPage.oauth.sendSignedRequest(url, handleSuccess, params);
+};
+
+bgPage.oauth.authorize(function() {
+  if (!bgPage.wordslistFeed) {
+	gwords.queryVocabulary();
+  } else {
+  if (!bgPage.words.length) {
+    gwords.getWordList();
+  } else {
+    gwords.renderWordList();
+  }
+  util.scheduleRequest();
+}});
+</script>
+</body>
+</html>

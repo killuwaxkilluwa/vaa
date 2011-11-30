@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<!--
+ * Copyright (c) 2010 The Chromium Authors. All rights reserved.  Use of this
+ * source code is governed by a BSD-style license that can be found in the
+ * LICENSE file.
+ *
+ * Author: Eric Bidelman <ericbidelman@chromium.org>
+-->
+<html>
+  <head>
+    <script type="text/javascript" src="chrome_ex_oauthsimple.js"></script>
+    <script type="text/javascript" src="chrome_ex_oauth.js"></script>
+	<script type="text/javascript" src="http://www.google.com/jsapi"></script>
+	<script type="text/javascript" src="js/jquery-1.6.2.min.js"></script>
+
+    <script type="text/javascript">
+	/*the following three lines are added by huan */
+	  google.load("language", "1");
+	  var g_stress_mark = String.fromCharCode(712);
+	  var d_stress_mark = String.fromCharCode(39);
+
+	  
+      var DOCLIST_SCOPE = 'https://docs.google.com/feeds';
+      var DOCLIST_FEED = DOCLIST_SCOPE + '/default/private/full/';
+      var SPRLIST_SCOPE = 'https://spreadsheets.google.com/feeds';
+      var SPRLIST_FEED = SPRLIST_SCOPE + '/spreadsheets/private/full/';
+
+      var words = []; // In memory cache for the user's entire wordlist.
+      var refreshRate = localStorage.refreshRate || 300; // 5 min default.
+      var pollIntervalMin = 1000 * refreshRate;
+      var requests = [];
+	  
+      var spreadsheetName = localStorage.spreadsheetName || 'MyVocabulary';
+      var wordslistFeed = localStorage.vocabularyListFeed;
+      var vocabularyLink = localStorage.vocabularyLink;
+      var wordslistAtom = localStorage.wordslistAtom;
+      var oauth = ChromeExOAuth.initBackgroundPage({
+        'request_url': 'https://www.google.com/accounts/OAuthGetRequestToken',
+        'authorize_url': 'https://www.google.com/accounts/OAuthAuthorizeToken',
+        'access_url': 'https://www.google.com/accounts/OAuthGetAccessToken',
+        'consumer_key': 'anonymous',
+        'consumer_secret': 'anonymous',
+        'scope': DOCLIST_SCOPE + ' ' + SPRLIST_SCOPE,
+        'app_name': 'VAA'
+      });
+      function setIcon(opt_badgeObj) {
+        if (opt_badgeObj) {
+          var badgeOpts = {};
+          if (opt_badgeObj && opt_badgeObj.text != undefined) {
+            badgeOpts['text'] = opt_badgeObj.text;
+          }
+          if (opt_badgeObj && opt_badgeObj.tabId) {
+            badgeOpts['tabId'] = opt_badgeObj.tabId;
+          }
+          chrome.browserAction.setBadgeText(badgeOpts);
+        }
+      };
+
+      function clearPendingRequests() {
+        for (var i = 0, req; req = requests[i]; ++i) {
+          window.clearTimeout(req);
+        }
+        requests = [];
+      };
+
+      function logout() {
+        words = [];
+        setIcon({'text': ''});
+        oauth.clearTokens();
+        clearPendingRequests();
+      };
+	  /*  the following is added by huan*/
+	chrome.extension.onRequest.addListener(function (request, sender, sendResponse) {
+		try {
+			if (request.type == 'currentstate' && oauth.hasToken()) {
+				sendResponse({
+					result: wordslistFeed
+				});
+			}
+		} catch(e) {}
+	},
+	false);
+	
+	var gwords = {};
+	gwords.constructAtomXml_ = function(wordTitle,phonetic,translation,wordLevels) {
+	  var atom = ['<entry xmlns="http://www.w3.org/2005/Atom" xmlns:gsx="http://schemas.google.com/spreadsheets/2006/extended">',
+				  '<gsx:words>',wordTitle,'</gsx:words>',
+				  '<gsx:levels>',wordLevels,'</gsx:levels>',
+				  '<gsx:phonetics>[',phonetic,']</gsx:phonetics>',
+				  '<gsx:translations>',translation,'</gsx:translations>',
+				  '</entry>'].join('');
+	  return atom;
+	};
+	
+	gwords.constructContentBody_ = function(title,phonetic,translation,wordLevels) {
+	  var body = [
+				  gwords.constructAtomXml_(title,phonetic,translation,wordLevels), '\r\n',
+				  ].join('');
+	  return body;
+	};
+	function addWord(word,phonetic,translation)
+	{
+		var wordLevels = 3;  // set wordValue to the defalt value
+		var handleSuccess = function(resp, xhr) {};
+		var params = {
+			'method': 'POST',
+			'headers': {
+			  'GData-Version': '3.0',
+			  'Content-Type': 'application/atom+xml',	  
+			},
+			'parameters': {'alt': 'json'},
+			'body': gwords.constructContentBody_(word,phonetic,translation,wordLevels)
+		  };
+		  oauth.sendSignedRequest(wordslistFeed, handleSuccess, params);	
+	}
+	var myport;
+	var skTemp = false;
+	var ckTemp = true;;
+	var akTemp = false;
+	if(localStorage.getItem("sk") == "true"){
+		skTemp = true;
+	}
+	if(localStorage.getItem("ck") == "false"){
+		ckTemp = false;
+	}
+	if(localStorage.getItem("ak") == "true"){
+		akTemp = true;
+	}
+	var dictionary = "Dict";
+	if(localStorage.getItem("dic") == "Google"){
+		dictionary = "Google";
+	}
+	var txt = "";
+	chrome.extension.onConnect.addListener(onPortConnect);
+	function onPortConnect(a){
+	if(a.name!="wordterminate")return false;
+	myport=a;
+	a.onMessage.addListener(onMessageRecieved);
+	}
+	function onMessageRecieved(a){
+	if (a.message == "translate") {
+          txt = a.txt;
+          goTrasnlate();}
+	else if (a.message == "select") txt = a.txt;
+	else if(a.message=="options"){
+		skTemp = a.Shift;ckTemp = a.Ctrl;akTemp = a.Alt;dictionary = a.Dic;
+		localStorage.setItem("sk",a.Shift);
+		localStorage.setItem("ck",a.Ctrl);
+		localStorage.setItem("ak",a.Alt);
+		localStorage.setItem("dic",a.Dic);
+		localStorage.setItem("lg",a.Lg);
+		localStorage.setItem("vdic",a.ViewDic);
+		localStorage.setItem("allNone",a.AllNone);
+		}
+	else if(a.message == "currentsc"){
+		myport.postMessage({message:"currentsc",sk:skTemp,ck:ckTemp,ak:akTemp});
+		}
+	else if(a.message == "close"){
+		chrome.tabs.getSelected( null, function(tab) 
+			{ chrome.tabs.remove(tab.id);   return true; });
+		}
+	}
+	/*
+	function name:goTrasnlate
+	function use :if the text is an english word,send a xmlHttpRequest to dict and deal with it;else do others
+	*/
+	function goTrasnlate() {
+        if (txt == "") return false;
+        var oneLineTxt = txt.replace(/[\r\n]/g, " ");
+        oneLineTxt = oneLineTxt.replace(/(^\s+)|(\s+$)/g, "");
+        if (oneLineTxt == "") return false;
+        if (/^[a-zA-Z]+$/.test(oneLineTxt)) {
+		  if(dictionary == "Dict")
+			translateEnglishWordByDict(oneLineTxt);
+		  else
+			translateEnglishWordByGoogle(oneLineTxt);
+        } else if (/^[\u4E00-\u9FA5]$/.test(oneLineTxt)) {
+          translateChineseChar(oneLineTxt);
+        } else if (/^\d+$/.test(oneLineTxt)) {
+          translateDecNumber(oneLineTxt);
+        } else if (/^0x[0-9a-f]+$/.test(oneLineTxt)) {
+          translateHexNumber(oneLineTxt);
+        } else {
+          translateSentence(txt);
+        }
+        txt = "";
+      }
+      function translateSentence(txt) {
+        var lang = localStorage.getItem('lg');
+		if(!lang) lang = "zh-CN";
+        google.language.detect(txt, function(a) {
+          if (! a.error && a.language) {
+            var rlang = lang;
+            if (a.language == lang && lang != "en") {
+              rlang = "en";
+            }
+            google.language.translate(txt, a.language, rlang, function(b) {
+              b.translation && myport.postMessage({
+                message: "translate",
+                txt: "" + b.translation
+              })
+            })
+          }
+        })
+      }
+	  
+      
+      function translateEnglishWordByDict(txt) {
+        var httpRequest = new XMLHttpRequest();
+        httpRequest.overrideMimeType('text/html');
+        httpRequest.onreadystatechange = function() {
+          if (httpRequest.readyState == 4 && httpRequest.status == 200) {
+            var h = httpRequest.responseText;
+            h = h.substring(h.indexOf("<span class='g b'>"));
+            h = h.substring(0, h.lastIndexOf("</div>"));
+            h = h.replace(/Define /, "");
+            h = h.replace(/[\r\n]/g, "");
+            var mp3 = h.replace(/.*?audio\(\s*'(.*?)'\s*\).*$/, "$1");
+            if (mp3 != "" && mp3 != h) {
+              var mp3url = "http://dict.cn/mp3.php?q=" + mp3;
+              (new Audio(mp3url)).play();
+            }
+            h = h.replace(/<script.*?<\/script>/g, "");
+            h = h.replace(/ class=['"].*?['"]/g, "");
+            h = h.replace(/<\/?(div|li)>/g, "<br />") + "<br />";
+            h = h.replace(/(<br\s+\/?>)+/g, "<br />");
+            h = h.replace(/例句与用法:/, "<br />例句与用法:");
+            h = h.replace(/词形变化:/, "<br />词形变化:");
+            h = h.replace(/<(?!(br|a |\/a))[^>]*>/g, "");
+            var colort = localStorage.getItem('ct');
+            var linkTag = "<a target='_blank' style='color:" + colort + "' href=\"http://dict.cn/";
+            h = h.replace(/<a href="mini.php\?q=/g, linkTag);
+            if (h.indexOf("No similar words found") != -1) {
+              h = txt;
+            } else {
+              var dictcn_url = "http://dict.cn/search.php?q=" + encodeURIComponent(txt);
+              h = h + "<br/><a href='" + dictcn_url + "' target='_blank' style='color:" + colort + "'>Powered by Dict.cn</a>";
+            }
+			var start = h.indexOf("[")+1;
+			var phonetic;
+			if(start == 0){}
+			else{
+				var end = h.indexOf("]");
+				phonetic = h.substring(start,end);
+			}			
+			google.language.detect(txt, function(a){  //asynchronous function
+			  if (! a.error && a.language) {
+				var rlang = "zh-CN";
+				google.language.translate(txt, a.language, rlang, function(b) {
+				  addWord(txt,phonetic,b.translation);//may have phonetic and chinese displaying problem
+				})
+			  }
+			});	
+			h = h.replace(":","<br />");
+			h = h.replace("[","<div class='sound' id = 'play'>[");
+			h = h.replace("]","]</div>");
+            myport.postMessage({
+              message: "translate",
+              txt: "" + h,
+			  mp3url:"" + mp3url
+            });
+          }
+        }
+        var request = "http://dict.cn/mini.php?q=" + encodeURIComponent(txt);
+        httpRequest.open('GET', request, true);
+        httpRequest.send(null);
+      }
+	  
+	  
+	  //killuwa modify
+	   function translateEnglishWordByGoogle(txt) {
+			$.ajax({
+		        url: "http://www.google.com/dictionary/json",
+		        dataType: "jsonp",
+		        data: {
+		          q: txt,
+		          sl: "en",
+		          tl: "zh",
+		          restrict: "pr,de"
+		        },
+		        success: function (data) {
+		        	  
+		        	alert(data.query);
+					
+		        	myport.postMessage({
+		                message: "translate",
+		                txt: "" + jsontohtml(data, ""),
+		      		 // mp3url:"" + mp3url
+		              });
+
+		        }
+		      });
+      }
+	  
+	  //killuwa add
+	   jsontohtml = function (json, type) {
+		    	  var out, tag, i, j;
+		    	  switch (type) {
+		    	  case "":
+		    	    out = "";
+		    	    tag = false;
+		    	    break;
+		    	  case "labels":
+		    	    out = "<span class=\"" + type + ((typeof json.title === "undefined") ? "" : "\" title=\"" + json.title) + "\">" + json.text;
+		    	    tag = "span";
+		    	    break;
+		    	  default:
+		    	    switch (json.type) {
+		    	    case "text":
+		    	    case "phonetic":
+		    	      out = "<div class=\"" + type + "\"><span class=\"" + json.type + "\">" + json.text + "</span>";
+		    	      tag = "div";
+		    	      break;
+		    	    case "url":
+		    	      out = json.text;
+		    	      tag = false;
+		    	      break;
+		    	    case "sound":
+		    	      out = "<span class=\"sound\" onclick=\"sound.play('" + json.text + "');\"></span>";
+		    	      tag = false;
+		    	      break;
+		    	    default:
+		    	      out = "<div class=\"" + type + " " + json.type + "\">";
+		    	      tag = "div";
+		    	      break;
+		    	    }
+		    	    break;
+		    	  }
+		    	  for (i in json) {
+		    	    if ($.isArray(json[i])) {
+		    	      for (j in json[i]) {
+		    	        out += jsontohtml(json[i][j], i);
+		    	      }
+		    	    }
+		    	  }
+		    	  if (tag) {
+		    	    out += "</" + tag + ">";
+		    	  }
+		    	  return out;
+		    	}
+	  
+      function translateChineseChar(txt) {
+        var request = "http://www.google.cn/dictionary?aq=f&langpair=zh-CN|zh-CN&q=";
+        request += encodeURIComponent(txt);
+        var httpRequest = new XMLHttpRequest();
+        httpRequest.overrideMimeType('text/html');
+        httpRequest.onreadystatechange = function() {
+          if (httpRequest.readyState == 4 && httpRequest.status == 200) {
+            var h = httpRequest.responseText;
+            var h = h.replace(/[\r\n]/g, "");
+            var h = h.substring(h.indexOf("id=\"pr-root\""));
+            h = h.substring(h.indexOf("<div"));
+            var end = h.indexOf("<li class=\"dct-eh\"");
+            if (end == -1) {
+              end = h.indexOf("<h3>");
+              if (end == -1) end = h.indexOf("dct-rt-sct");
+            }
+            h = h.substring(0, end);
+            h = h.substring(0, h.lastIndexOf("</ul>"));
+            h = h.replace(/<(?!(li|ul|\/ul))[^>]*>/g, "");
+            var lines = h.split("<li ");
+            var indent = 0;
+            var num = 0;
+            for (var i = 0; i < lines.length; ++i) {
+              if (i > 0) {
+                if (lines[i].indexOf("dct-ec") != -1) {
+                  indent = num = 0;
+                }
+                lines[i] = lines[i].replace(/^[^>]*>/, "");
+                var prefix = "";
+                switch (indent) {
+                  case 0: break;
+                  case 1: prefix = ++num + "."; break;
+                  case 2: prefix = "&#9642;"; break;
+                  case 3: prefix = "&#9643;"; break;
+                  default: prefix = "&#9702;"; break;
+                }
+                lines[i] = prefix + "&nbsp;" + lines[i];
+                for (var j = 0; j < indent * 4; ++j) {
+                  lines[i] = "&nbsp;" + lines[i];
+                }
+              }
+              if (lines[i].indexOf("<ul") != -1) ++indent;
+              if (lines[i].indexOf("</ul") != -1) --indent;
+              lines[i] = lines[i].replace(/<[^>]*>/g, "");
+            }
+            h = lines.join("<br>");
+            if (h == "") h = txt;
+            var colort = localStorage.getItem('ct');
+            h = h + "<br><br><a href='" + request + "' target='_blank' style='color:" + colort + "'>google dictionary</a>";
+			myport.postMessage({
+              message: "translate",
+              txt: "" + h
+            });
+          }
+        };
+        httpRequest.open('GET', request, true);
+        httpRequest.send(null);
+      }
+      function translateDecNumber(txt) {
+        var colort = localStorage.getItem('ct');
+        var linkTemplate = "<a href='LINK' target='_blank' style='color:" + colort + "'>LINK</a><br>";
+        var h = "";
+        var num = parseInt(txt, 10);
+        var delay = false;
+        h += "<div onmouseup='event.stopPropagation();'>";
+        h += " Hex: 0x" + num.toString(16);
+        h += "</div>";
+        if (num > 5360145 && num < 20000000) {
+          h += linkTemplate.replace(/LINK/g, "http://cl/" + txt);
+        }
+        if (num > 600000 && num < 3000000) {
+          h += linkTemplate.replace(/LINK/g, "http://b/" + txt);
+        }
+        if (num > 13000000000 && num < 14000000000 ||
+            num > 15000000000 && num < 16000000000 ||
+            num > 18000000000 && num < 19000000000) {
+          var httpRequest = new XMLHttpRequest();
+          httpRequest.overrideMimeType('text/html');
+          httpRequest.onreadystatechange = function() {
+            if (httpRequest.readyState == 4 && httpRequest.status == 200) {
+              var r = httpRequest.responseText;
+              var regExp = new RegExp(".*<b>" + num + "</b> 归属地查询</a></h3>&nbsp;([^<]+)<div.*");
+              if (r.search(regExp) == -1) {
+                r = "";
+              } else {
+                r = r.replace(/[\r\n]/g, "").replace(regExp, "$1");
+                r = "归属地: " + r + "<br>";
+              }
+              myport.postMessage({
+                message: "translate",
+                txt: h + r
+              });
+            }
+          };
+          var request = "http://www.google.cn/search?q=" + num;
+          httpRequest.open('GET', request, true);
+          httpRequest.send(null);
+          delay = true;
+        }
+        if (!delay) {
+          myport.postMessage({
+            message: "translate",
+            txt: h
+          });
+        }
+      }
+      function translateHexNumber(txt) {
+        var h = "<div onmouseup='event.stopPropagation();'>";
+        h += " Dec: " + parseInt(txt, 16) + "</div>";
+        myport.postMessage({
+          message: "translate",
+          txt: h
+        });
+      }	  
+    </script>
+  </head>
+  <body >
+  </body>
+</html>

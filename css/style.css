@@ -1,0 +1,272 @@
+body {
+	margin: 10px;
+	min-width: 840px;
+	font-size: 14px;
+}
+em {
+	font-weight: bold;
+	font-style: normal;
+}
+a {
+	color: #666;
+	text-decoration: none;
+}
+a:hover {
+	text-decoration: underline;
+}
+a:active {
+	color: #000;
+}
+img {
+	border: none;
+}
+header {
+	font-size: 128px;
+	text-align: center;
+	height: 192px;
+	position: absolute;
+	top: 50%;
+	right: 50%;
+}
+header>span {
+	position: relative;
+	top: -50%;
+	right: -50%;
+}
+footer {
+	color: #808080;
+	background: #EEE;
+	width: 100%;
+	padding: 5px;
+	position: fixed;
+	bottom: 0;
+	left: 0;
+}
+footer>span {
+	margin: 0 6px;
+}
+#github {
+	position: absolute;
+	top: 0;
+	right: 0;
+	z-index: 100;
+}
+#loading {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	z-index: 20;
+	display: none;
+}
+#loading>span.box {
+	background: #333;
+	width: 42px;
+	height: 42px;
+	top: -21px;
+	left: -21px;
+	display: block;
+	position: relative;
+	opacity: .8;
+	-webkit-border-radius: 5px;
+	-moz-border-radius: 5px;
+	border-radius: 5px;
+}
+#loading>span.box>span.spinner {
+	width: 42px;
+	height: 42px;
+	display: block;
+	background: url(spinner.png) no-repeat;
+}
+#toolbox {
+	background: #F5F5F5;
+	width: 100%;
+	height: 44px;
+	border-bottom: #E5E5E5 solid 1px;
+	position: fixed;
+	top: 0;
+	left: 0;
+	z-index: 99;
+}
+#search {
+	padding: 10px;
+}
+#search>form>* {
+	display: inline-block;
+	vertical-align: top;
+}
+#search>form>#lang {
+}
+#search>form>#swapper {
+}
+span.swapper {
+	background: url(swapper.png) 3px 2px no-repeat;
+	opacity: .6;
+	width: 22px;
+	height: 22px;	
+	display: inline-block;
+}
+div#swapper:hover span.swapper:hover {
+	opacity: .8;
+}
+#dictionary {
+	margin-top: 55px;
+}
+#dictionary a {
+	color: #0E774A;
+}
+#dictionary a:active {
+	color: #CC1111;
+}
+div.primaries:first-child:before, div.webDefinitions:before {
+	background-color: #F5F5F5;
+	border-style: solid;
+	border-color: #E5E5E5;
+	border-width: 1px 0;
+	font-weight: bold;
+	display: block;
+	padding: 5px 10px;
+	margin: 10px 0;
+}
+div.primaries:first-child:before {
+	content: "Dictionary";
+}
+div.webDefinitions:before {
+	content: "Web definitions";
+}
+div.primaries div:before, div.primaries span:before {
+	content: " ";
+}
+div.primaries {
+	counter-reset: p;
+}
+div.primaries>div.container {
+	counter-reset: c;
+}
+div.primaries>div.meaning>div.terms>span.text:before {
+	counter-increment: p;
+	content: counter(p) ". ";
+}
+div.primaries>div.container>div.meaning>div.terms:first-child>span.text:before {
+	counter-increment: c;
+	content: counter(c) ". ";
+}
+div.primaries>div.container>div.meaning>div.terms>span.text:before {
+	content: "\0000a0\0000a0\0000a0\0000a0";
+}
+div.primaries>div.terms {
+	display: inline-block;
+}
+div.primaries>div.terms>*, div.primaries>div.related>*, div.primaries>div.container>span.labels, span.sound {
+	margin-left: 8px;
+}
+div.primaries:first-child>div.terms:first-child>span.text {
+	font-size: 18px;
+	font-weight: bold;
+	display: block;
+}
+div.primaries>div.terms:first-child>span.text, div.webDefinitions>div.terms {
+        display: none;
+}
+div.primaries>div.related>div.terms {
+	color: #767676;
+	display: inline-block;
+}
+div.primaries>div.related>div.terms:after {
+	content: ";";
+}
+div.primaries>div.related>div.terms:last-child:after {
+	content: "";
+}
+div.primaries>div.related>div.terms>span.text {
+	font-weight: bold;
+}
+div.primaries>div.meaning, div.primaries>div.container>div.meaning,div.primaries>div.container>div.related {
+	margin: 0 0 6px 20px;
+}
+span.sound {
+	background: url(pronunciation.png) no-repeat;
+	height: 14px;
+	width: 14px;
+	opacity: .6;
+	display: inline-block;
+}
+span.sound:hover {
+	opacity: .8;
+}
+div#sound {
+	position: fixed;
+	top: 0;
+	right: 0;
+}
+div.example {
+	color: #767676;
+	margin-left: 40px;
+}
+div.example>div.terms:first-child>span.text:before {
+        content: "- ";
+}
+div.example>div.terms>span.text:before {
+	content: "\0000a0\0000a0";
+}
+div.webDefinitions>div.meaning {
+	margin: 0 8px;
+}
+div.webDefinitions>div.meaning>div.terms {
+	margin-bottom: 6px;
+}
+div.webDefinitions>div.meaning>a {
+	display: inline-block;
+	margin-bottom: 16px;
+}
+[title=Phonetic] {
+	color: #767676;
+}
+[title^="Part-of"], [title=Word] {
+	font-weight: bold;
+}
+[title=Geographic], [title=Grammar], [title=Reference], [title=Register], [title=Subject] {
+	border-left: dotted 1px #BBB;
+	margin-left: 0.5em;
+	color: #767676;
+}
+
+/* Style for jQuery UI*/
+
+.ui-autocomplete {
+	background: #FFF;
+	border: #F7F7F7 solid 1px;
+	-webkit-box-shadow: 0 0 5px #666;
+	-moz-box-shadow: 0 0 5px #666;
+	box-shadow: 0 0 5px #666;
+	position: fixed;
+	cursor: default;
+}	
+.ui-menu {
+	list-style:none;
+	padding: 2px;
+	margin: 0;
+	display:block;
+	float: left;
+}
+.ui-menu .ui-menu {
+	margin-top: -3px;
+}
+.ui-menu .ui-menu-item {
+	margin:0;
+	padding: 0;
+	zoom: 1;
+	float: left;
+	clear: left;
+	width: 100%;
+}
+.ui-menu .ui-menu-item a {
+	text-decoration:none;
+	display:block;
+	padding:.2em .4em;
+	line-height:1.5;
+	zoom:1;
+}
+.ui-menu .ui-menu-item a.ui-state-hover,
+.ui-menu .ui-menu-item a.ui-state-active {
+	background: #EEE;
+}

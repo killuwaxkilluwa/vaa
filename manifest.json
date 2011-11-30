@@ -1,0 +1,31 @@
+{
+  "name": "__MSG_extName__",
+  "version": "0.9.0",
+  "icons": {
+    "48": "img/vaa-48.png",
+    "128": "img/vaa-128.png"
+  },
+  "description": "__MSG_description__",
+  "default_locale": "en",
+  "background_page": "background.html",
+  "options_page": "options.html",
+  "browser_action": {
+    "default_title": "__MSG_default_title__",
+    "default_icon": "img/vaa-32.png",
+    "popup": "popup.html"
+  },
+   "content_scripts": [ {
+      "js": [ "catch_word.js" ],
+      "matches": [ "http://*/*", "https://*/*" ],
+      "run_at": "document_end"
+   } ],
+  "permissions": [
+    "tabs",
+    "http://*/*", "https://*/*", 
+    "https://docs.google.com/feeds/*",
+    "https://spreadsheets.google.com/feeds/*",
+    "https://www.google.com/accounts/OAuthGetRequestToken",
+    "https://www.google.com/accounts/OAuthAuthorizeToken",
+    "https://www.google.com/accounts/OAuthGetAccessToken"
+  ]
+}
